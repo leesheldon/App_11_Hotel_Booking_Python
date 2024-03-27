@@ -1,7 +1,9 @@
 import pandas as pd
+import time
 
 df = pd.read_csv("hotels.csv", dtype={"id": str})
 df_cards = pd.read_csv("cards.csv", dtype=str).to_dict(orient="records")
+df_cards_security = pd.read_csv("card_security.csv", dtype=str)
 
 
 class Hotel:
@@ -29,11 +31,14 @@ class ReservationTicket:
         self.hotel = param_hotel
 
     def generate(self):
+        booked_on = time.strftime("%b %d %Y %H:%M:%S")
+
         content = f"""
         Thank you for your reservation!
         Here are your booking data:
         Name: {self.customer_name}
         Hotel name: {self.hotel.hotel_name}
+        Booked on: {booked_on}
         """
         return content
 
@@ -51,24 +56,58 @@ class CreditCard:
             return False
 
 
+class SecureCreditCard(CreditCard):
+    def authenticate(self, param_given_password):
+        pwd = df_cards_security.loc[df_cards_security["number"] == self.card_number, "password"].squeeze()
+        if pwd == param_given_password:
+            return True
+        else:
+            return False
+
+
 print(df)
 print("\n")
-hotel_ID = input("Enter the ID of the hotel: ")
-hotel = Hotel(hotel_ID)
 
-if hotel.available():
-    customer_name = input("Enter your name: ")
 
-    credit_card = CreditCard()
-    if credit_card.validate():
-        # Book hotel
-        hotel.book()
-        reservation_ticket = ReservationTicket(param_customer_name=customer_name, param_hotel=hotel)
-        print(reservation_ticket.generate())
+while True:
+    hotel_ID = input("Enter the ID of the hotel or exit: ")
+
+    if hotel_ID.startswith("exit"):
+        break
+    elif len(df.loc[df["id"] == hotel_ID]) <= 0:
+        print("Your provided Hotel ID does not exist in our list.")
+        continue
     else:
-        print("There was a problem with your payment.")
-else:
-    print("Your selected hotel is full now.")
+        hotel = Hotel(hotel_ID)
+
+        if hotel.available():
+            card_number = input("Enter your credit card number: ")
+            credit_card = SecureCreditCard(card_number)
+
+            expiration = input("Enter the expiration date (mm/yy): ")
+            holder = input("Enter the holder name: ")
+            cvc = input("Enter the CVC: ")
+
+            if credit_card.validate(param_expiration=expiration, param_holder=holder.upper(), param_cvc=cvc):
+                given_pwd = input("Enter your credit card password: ")
+
+                if credit_card.authenticate(param_given_password=given_pwd):
+                    customer_name = input("Enter your name: ")
+                    # Book hotel
+                    hotel.book()
+                    reservation_ticket = ReservationTicket(param_customer_name=customer_name.title(), param_hotel=hotel)
+                    print(reservation_ticket.generate())
+                    break
+
+                else:
+                    print("Credit card authentication failed.")
+            else:
+                print("There was a problem with your payment.")
+        else:
+            print("Your selected hotel is full now.")
+
+print("Thank you and See you again!")
+
 
 
 
